@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background-color: #F2F1EA;
+  color: #14213D;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background-color: #1E3D34;
+  color: #F2F1EA;
+}
+
+/* Ledger rule lines for tables */
+.ledger-table th {
+  border-bottom: 2px solid #14213D;
+}
+.ledger-table td {
+  border-bottom: 1px solid #D8D5C8;
+}
+
+@media print {
+  .no-print { display: none !important; }
+}
