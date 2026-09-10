@@ -41,7 +41,7 @@ export default function App() {
   const pages = {
     dashboard: <Dashboard uid={user.uid} settings={settings} setPage={setPage} />,
     transactions: <Transactions uid={user.uid} vatRate={vatRate} />,
-    invoices: <Invoices uid={user.uid} vatRate={vatRate} />,
+    invoices: <Invoices uid={user.uid} vatRate={vatRate} settings={settings} />,
     clients: <Clients uid={user.uid} />,
     vat: <VatReturn uid={user.uid} settings={settings} />,
     reports: <Reports uid={user.uid} />,
