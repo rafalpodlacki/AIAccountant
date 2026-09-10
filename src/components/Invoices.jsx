@@ -7,7 +7,7 @@ import { formatGBP, formatDate, vatQuarter } from '../utils/format';
 
 const emptyLine = () => ({ description: '', qty: 1, unitPrice: '', vatRate: 20 });
 
-export default function Invoices({ uid, vatRate }) {
+export default function Invoices({ uid, vatRate, settings }) {
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -67,6 +67,8 @@ export default function Invoices({ uid, vatRate }) {
     await addDoc(collection(db, 'users', uid, 'invoices'), {
       ...form,
       clientName: client?.name || '',
+      clientEmail: client?.email || '',
+      clientAddress: client?.address || '',
       subtotal, vatTotal, total,
       status: 'draft',
       createdAt: new Date().toISOString(),
@@ -97,6 +99,34 @@ export default function Invoices({ uid, vatRate }) {
     await updateDoc(doc(db, 'users', uid, 'invoices', inv.id), { status });
   }
 
+  function emailInvoice(inv) {
+    const client = clients.find((c) => c.id === inv.clientId);
+    if (!client?.email) {
+      alert(`${inv.clientName || 'This client'} has no email address saved. Add one on the Clients tab first.`);
+      return;
+    }
+    const subject = `Invoice ${inv.invoiceNumber}`;
+    const body = [
+      `Hi ${client.name},`,
+      '',
+      `Please find the details of invoice ${inv.invoiceNumber} below.`,
+      '',
+      ...inv.lineItems.map((l) => `- ${l.description}: ${l.qty} x ${formatGBP(l.unitPrice)} (VAT ${l.vatRate}%)`),
+      '',
+      `Subtotal: ${formatGBP(inv.subtotal)}`,
+      `VAT: ${formatGBP(inv.vatTotal)}`,
+      `Total due: ${formatGBP(inv.total)}`,
+      inv.dueDate ? `Due date: ${formatDate(inv.dueDate)}` : '',
+      '',
+      'A printable copy is attached — open the invoice, click "Print / Save PDF", and attach it here before sending.',
+      '',
+      'Thanks,',
+    ].filter((l) => l !== null && l !== undefined).join('\n');
+
+    window.location.href = `mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (inv.status === 'draft') setStatus(inv, 'sent');
+  }
+
   async function handleDelete(id) {
     if (confirm('Delete this invoice? (This will not remove any linked transaction.)')) {
       await deleteDoc(doc(db, 'users', uid, 'invoices', id));
@@ -104,7 +134,7 @@ export default function Invoices({ uid, vatRate }) {
   }
 
   if (viewing) {
-    return <InvoicePrintView invoice={viewing} onClose={() => setViewing(null)} />;
+    return <InvoicePrintView invoice={viewing} settings={settings} onClose={() => setViewing(null)} onEmail={() => emailInvoice(viewing)} />;
   }
 
   return (
@@ -216,6 +246,7 @@ export default function Invoices({ uid, vatRate }) {
               </td>
               <td className="py-2 text-right font-mono text-xs whitespace-nowrap">
                 <button onClick={() => setViewing(inv)} className="text-ink/50 hover:text-ink mr-3">view</button>
+                <button onClick={() => emailInvoice(inv)} className="text-ink/50 hover:text-ink mr-3">email</button>
                 {inv.status === 'draft' && (
                   <button onClick={() => setStatus(inv, 'sent')} className="text-ink/50 hover:text-ink mr-3">mark sent</button>
                 )}
@@ -259,57 +290,102 @@ function StatusBadge({ status }) {
   );
 }
 
-function InvoicePrintView({ invoice, onClose }) {
+function InvoicePrintView({ invoice, settings, onClose, onEmail }) {
+  const s = settings || {};
   return (
     <div>
       <div className="flex justify-between mb-6 no-print">
         <button onClick={onClose} className="font-mono text-xs text-ink/60 hover:text-ink">← back</button>
-        <button onClick={() => window.print()} className="bg-ledger text-paper px-4 py-2 font-serif text-sm hover:bg-ledgerlight">
-          Print / Save PDF
-        </button>
+        <div className="flex gap-2">
+          <button onClick={onEmail} className="border border-ink text-ink px-4 py-2 font-serif text-sm hover:bg-ink hover:text-paper transition-colors">
+            Email invoice
+          </button>
+          <button onClick={() => window.print()} className="bg-ledger text-paper px-4 py-2 font-serif text-sm hover:bg-ledgerlight">
+            Print / Save PDF
+          </button>
+        </div>
       </div>
-      <div className="border border-line p-10 bg-white max-w-2xl">
-        <div className="flex justify-between mb-8">
-          <div>
-            <h1 className="font-serif text-2xl text-ink">Invoice {invoice.invoiceNumber}</h1>
-            <p className="font-mono text-xs text-ink/60 mt-1">Issued {formatDate(invoice.issueDate)}</p>
-            {invoice.dueDate && <p className="font-mono text-xs text-ink/60">Due {formatDate(invoice.dueDate)}</p>}
+      <div className="border border-line bg-white max-w-2xl">
+        <div className="h-2 bg-ledger" />
+        <div className="p-10">
+          {/* Header: logo + company, invoice title */}
+          <div className="flex justify-between items-start mb-10 pb-8 border-b border-line">
+            <div className="flex items-start gap-4">
+              {s.logoDataUrl && (
+                <img src={s.logoDataUrl} alt={s.companyName || 'Logo'} className="h-14 w-14 object-contain" />
+              )}
+              <div>
+                <div className="font-serif text-lg text-ink leading-tight">{s.companyName || 'Your company'}</div>
+                {s.address && <div className="font-mono text-[11px] text-ink/60 whitespace-pre-line mt-1">{s.address}</div>}
+                <div className="font-mono text-[11px] text-ink/60 mt-1">
+                  {s.email && <div>{s.email}</div>}
+                  {s.phone && <div>{s.phone}</div>}
+                  {s.companyNumber && <div>Co. no. {s.companyNumber}</div>}
+                  {s.vatRegistered && s.vatNumber && <div>VAT {s.vatNumber}</div>}
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <h1 className="font-serif text-3xl text-ink">Invoice</h1>
+              <div className="font-mono text-xs text-ink/60 mt-1">{invoice.invoiceNumber}</div>
+              <div className="font-mono text-[11px] text-ink/60 mt-3">Issued {formatDate(invoice.issueDate)}</div>
+              {invoice.dueDate && <div className="font-mono text-[11px] text-ink/60">Due {formatDate(invoice.dueDate)}</div>}
+            </div>
           </div>
-          <div className="text-right font-mono text-xs text-ink/70">
-            <div>Bill to</div>
-            <div className="font-semibold text-ink">{invoice.clientName}</div>
+
+          {/* Bill to */}
+          <div className="mb-8">
+            <div className="font-mono text-[11px] text-ink/50 uppercase tracking-wide mb-1">Bill to</div>
+            <div className="font-serif text-lg text-ink">{invoice.clientName}</div>
+            {invoice.clientAddress && <div className="font-mono text-xs text-ink/60 whitespace-pre-line mt-1">{invoice.clientAddress}</div>}
+            {invoice.clientEmail && <div className="font-mono text-xs text-ink/60 mt-1">{invoice.clientEmail}</div>}
           </div>
-        </div>
-        <table className="w-full mb-6 text-sm">
-          <thead>
-            <tr className="text-left font-mono text-xs text-ink/70 border-b-2 border-ink">
-              <th className="py-2">Description</th>
-              <th className="py-2 text-right">Qty</th>
-              <th className="py-2 text-right">Unit price</th>
-              <th className="py-2 text-right">VAT</th>
-              <th className="py-2 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody className="tabular">
-            {invoice.lineItems.map((l, i) => (
-              <tr key={i} className="border-b border-line">
-                <td className="py-2">{l.description}</td>
-                <td className="py-2 text-right">{l.qty}</td>
-                <td className="py-2 text-right">{formatGBP(l.unitPrice)}</td>
-                <td className="py-2 text-right">{l.vatRate}%</td>
-                <td className="py-2 text-right">{formatGBP((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
+
+          <table className="w-full mb-6 text-sm">
+            <thead>
+              <tr className="text-left font-mono text-xs text-ink/70 border-b-2 border-ink">
+                <th className="py-2">Description</th>
+                <th className="py-2 text-right">Qty</th>
+                <th className="py-2 text-right">Unit price</th>
+                <th className="py-2 text-right">VAT</th>
+                <th className="py-2 text-right">Total</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="flex justify-end">
-          <div className="w-56 font-mono text-sm tabular">
-            <Row label="Subtotal" value={invoice.subtotal} />
-            <Row label="VAT" value={invoice.vatTotal} />
-            <Row label="Total due" value={invoice.total} bold />
+            </thead>
+            <tbody className="tabular">
+              {invoice.lineItems.map((l, i) => (
+                <tr key={i} className="border-b border-line">
+                  <td className="py-2">{l.description}</td>
+                  <td className="py-2 text-right">{l.qty}</td>
+                  <td className="py-2 text-right">{formatGBP(l.unitPrice)}</td>
+                  <td className="py-2 text-right">{l.vatRate}%</td>
+                  <td className="py-2 text-right">{formatGBP((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex justify-end mb-8">
+            <div className="w-56 font-mono text-sm tabular">
+              <Row label="Subtotal" value={invoice.subtotal} />
+              <Row label="VAT" value={invoice.vatTotal} />
+              <Row label="Total due" value={invoice.total} bold />
+            </div>
           </div>
+
+          {(s.bankAccountNumber || s.bankSortCode) && (
+            <div className="border-t border-line pt-5 mb-5">
+              <div className="font-mono text-[11px] text-ink/50 uppercase tracking-wide mb-2">Payment details</div>
+              <div className="font-mono text-xs text-ink/70 grid grid-cols-2 gap-x-6 gap-y-1 max-w-sm">
+                {s.bankName && <><span className="text-ink/50">Bank</span><span>{s.bankName}</span></>}
+                {s.bankAccountName && <><span className="text-ink/50">Account name</span><span>{s.bankAccountName}</span></>}
+                {s.bankSortCode && <><span className="text-ink/50">Sort code</span><span>{s.bankSortCode}</span></>}
+                {s.bankAccountNumber && <><span className="text-ink/50">Account no.</span><span>{s.bankAccountNumber}</span></>}
+              </div>
+            </div>
+          )}
+
+          {invoice.notes && <p className="font-mono text-xs text-ink/60 border-t border-line pt-4 mb-2">{invoice.notes}</p>}
+          {s.invoiceFooterNote && <p className="font-serif text-sm text-ink/70 mt-4">{s.invoiceFooterNote}</p>}
         </div>
-        {invoice.notes && <p className="font-mono text-xs text-ink/60 mt-8 border-t border-line pt-4">{invoice.notes}</p>}
       </div>
     </div>
   );
