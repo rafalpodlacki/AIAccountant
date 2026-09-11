@@ -90,6 +90,40 @@ firebase deploy --only hosting
 Firebase will give you a `https://company-books-xxxx.web.app` URL you can
 open from any device and even add to your phone's home screen.
 
+## 5b. Auto-deploy on every push (recommended, matches your other apps)
+
+This project already includes `.github/workflows/deploy.yml`, which rebuilds
+and redeploys automatically every time you push to `main` — no local
+commands needed after this one-time setup.
+
+**One-time setup (about 15 minutes):**
+
+1. **Get a Firebase service account key** — Firebase Console → your project
+   → ⚙️ Project settings → **Service accounts** tab → **Generate new
+   private key**. This downloads a JSON file. Keep it safe; it's a real
+   credential.
+2. **Add secrets to your GitHub repo** — repo → Settings → **Secrets and
+   variables → Actions → New repository secret**. Add each of these:
+   - `FIREBASE_SERVICE_ACCOUNT` — paste the *entire contents* of the JSON
+     file from step 1
+   - `VITE_FIREBASE_API_KEY`
+   - `VITE_FIREBASE_AUTH_DOMAIN`
+   - `VITE_FIREBASE_PROJECT_ID`
+   - `VITE_FIREBASE_STORAGE_BUCKET`
+   - `VITE_FIREBASE_MESSAGING_SENDER_ID`
+   - `VITE_FIREBASE_APP_ID`
+
+   (the six `VITE_*` values are the same ones from your `.env` file)
+3. **Push to `main`** — GitHub Actions will build and deploy automatically.
+   Check the **Actions** tab on your repo to watch it run.
+
+After this, editing a file on GitHub (or pushing from your PC) and merging
+to `main` is all it takes — the live site updates itself within about a
+minute. No `npm run build` or `firebase deploy` ever again.
+
+This is the same workflow file you can drop into any future app — just
+change the `projectId` in `deploy.yml` and add that app's own six secrets.
+
 ## Notes on the VAT calculator
 
 It's a straightforward estimate built from your recorded transactions
