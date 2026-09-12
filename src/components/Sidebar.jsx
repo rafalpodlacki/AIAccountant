@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { APP_VERSION } from '../version';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -45,6 +46,7 @@ export default function Sidebar({ page, setPage, companyName }) {
         >
           Sign out
         </button>
+        <div className="font-mono text-[10px] text-paper/30 mt-2">v{APP_VERSION}</div>
       </div>
     </div>
   );
